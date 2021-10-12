@@ -60,15 +60,15 @@ typedef signed __int32    int32_t;
   typedef AnnoyIndexSingleThreadedBuildPolicy AnnoyIndexThreadedBuildPolicy;
 #endif
 
-template class AnnoyIndexInterface<int32_t, float>;
+template class AnnoyIndexInterface<int64_t, float>;
 
-class HammingWrapper : public AnnoyIndexInterface<int32_t, float> {
+class HammingWrapper : public AnnoyIndexInterface<int64_t , float> {
   // Wrapper class for Hamming distance, using composition.
   // This translates binary (float) vectors into packed uint64_t vectors.
   // This is questionable from a performance point of view. Should reconsider this solution.
 private:
   int32_t _f_external, _f_internal;
-  AnnoyIndex<int32_t, uint64_t, Hamming, Kiss64Random, AnnoyIndexThreadedBuildPolicy> _index;
+  AnnoyIndex<int64_t, uint64_t, Hamming, Kiss64Random, AnnoyIndexThreadedBuildPolicy> _index;
   void _pack(const float* src, uint64_t* dst) const {
     for (int32_t i = 0; i < _f_internal; i++) {
       dst[i] = 0;
@@ -84,7 +84,7 @@ private:
   };
 public:
   HammingWrapper(int f) : _f_external(f), _f_internal((f + 63) / 64), _index((f + 63) / 64) {};
-  bool add_item(int32_t item, const float* w, char**error) {
+  bool add_item(int64_t item, const float* w, char**error) {
     vector<uint64_t> w_internal(_f_internal, 0);
     _pack(w, &w_internal[0]);
     return _index.add_item(item, &w_internal[0], error);
@@ -94,8 +94,8 @@ public:
   bool save(const char* filename, bool prefault, char** error) { return _index.save(filename, prefault, error); };
   void unload() { _index.unload(); };
   bool load(const char* filename, bool prefault, char** error) { return _index.load(filename, prefault, error); };
-  float get_distance(int32_t i, int32_t j) const { return _index.get_distance(i, j); };
-  void get_nns_by_item(int32_t item, size_t n, int search_k, vector<int32_t>* result, vector<float>* distances) const {
+  float get_distance(int64_t i, int64_t j) const { return _index.get_distance(i, j); };
+  void get_nns_by_item(int64_t item, size_t n, int search_k, vector<int64_t>* result, vector<float>* distances) const {
     if (distances) {
       vector<uint64_t> distances_internal;
       _index.get_nns_by_item(item, n, search_k, result, &distances_internal);
@@ -104,7 +104,7 @@ public:
       _index.get_nns_by_item(item, n, search_k, result, NULL);
     }
   };
-  void get_nns_by_vector(const float* w, size_t n, int search_k, vector<int32_t>* result, vector<float>* distances) const {
+  void get_nns_by_vector(const float* w, size_t n, int search_k, vector<int64_t>* result, vector<float>* distances) const {
     vector<uint64_t> w_internal(_f_internal, 0);
     _pack(w, &w_internal[0]);
     if (distances) {
@@ -115,10 +115,10 @@ public:
       _index.get_nns_by_vector(&w_internal[0], n, search_k, result, NULL);
     }
   };
-  int32_t get_n_items() const { return _index.get_n_items(); };
-  int32_t get_n_trees() const { return _index.get_n_trees(); };
+  int64_t get_n_items() const { return _index.get_n_items(); };
+  int64_t get_n_trees() const { return _index.get_n_trees(); };
   void verbose(bool v) { _index.verbose(v); };
-  void get_item(int32_t item, float* v) const {
+  void get_item(int64_t item, float* v) const {
     vector<uint64_t> v_internal(_f_internal, 0);
     _index.get_item(item, &v_internal[0]);
     _unpack(&v_internal[0], v);
@@ -131,7 +131,7 @@ public:
 typedef struct {
   PyObject_HEAD
   int f;
-  AnnoyIndexInterface<int32_t, float>* ptr;
+  AnnoyIndexInterface<int64_t, float>* ptr;
 } py_annoy;
 
 
@@ -150,17 +150,17 @@ py_an_new(PyTypeObject *type, PyObject *args, PyObject *kwargs) {
     // This keeps coming up, see #368 etc
     PyErr_WarnEx(PyExc_FutureWarning, "The default argument for metric will be removed "
 		 "in future version of Annoy. Please pass metric='angular' explicitly.", 1);
-    self->ptr = new AnnoyIndex<int32_t, float, Angular, Kiss64Random, AnnoyIndexThreadedBuildPolicy>(self->f);
+    self->ptr = new AnnoyIndex<int64_t, float, Angular, Kiss64Random, AnnoyIndexThreadedBuildPolicy>(self->f);
   } else if (!strcmp(metric, "angular")) {
-   self->ptr = new AnnoyIndex<int32_t, float, Angular, Kiss64Random, AnnoyIndexThreadedBuildPolicy>(self->f);
+   self->ptr = new AnnoyIndex<int64_t, float, Angular, Kiss64Random, AnnoyIndexThreadedBuildPolicy>(self->f);
   } else if (!strcmp(metric, "euclidean")) {
-    self->ptr = new AnnoyIndex<int32_t, float, Euclidean, Kiss64Random, AnnoyIndexThreadedBuildPolicy>(self->f);
+    self->ptr = new AnnoyIndex<int64_t, float, Euclidean, Kiss64Random, AnnoyIndexThreadedBuildPolicy>(self->f);
   } else if (!strcmp(metric, "manhattan")) {
-    self->ptr = new AnnoyIndex<int32_t, float, Manhattan, Kiss64Random, AnnoyIndexThreadedBuildPolicy>(self->f);
+    self->ptr = new AnnoyIndex<int64_t, float, Manhattan, Kiss64Random, AnnoyIndexThreadedBuildPolicy>(self->f);
   } else if (!strcmp(metric, "hamming")) {
     self->ptr = new HammingWrapper(self->f);
   } else if (!strcmp(metric, "dot")) {
-    self->ptr = new AnnoyIndex<int32_t, float, DotProduct, Kiss64Random, AnnoyIndexThreadedBuildPolicy>(self->f);
+    self->ptr = new AnnoyIndex<int64_t, float, DotProduct, Kiss64Random, AnnoyIndexThreadedBuildPolicy>(self->f);
   } else {
     PyErr_SetString(PyExc_ValueError, "No such metric");
     return NULL;
@@ -235,7 +235,7 @@ py_an_save(py_annoy *self, PyObject *args, PyObject *kwargs) {
 
 
 PyObject*
-get_nns_to_python(const vector<int32_t>& result, const vector<float>& distances, int include_distances) {
+get_nns_to_python(const vector<int64_t>& result, const vector<float>& distances, int include_distances) {
   PyObject* l = PyList_New(result.size());
   for (size_t i = 0; i < result.size(); i++)
     PyList_SetItem(l, i, PyInt_FromLong(result[i]));
@@ -254,7 +254,7 @@ get_nns_to_python(const vector<int32_t>& result, const vector<float>& distances,
 }
 
 
-bool check_constraints(py_annoy *self, int32_t item, bool building) {
+bool check_constraints(py_annoy *self, int64_t item, bool building) {
   if (item < 0) {
     PyErr_SetString(PyExc_IndexError, "Item index can not be negative");
     return false;
@@ -268,19 +268,19 @@ bool check_constraints(py_annoy *self, int32_t item, bool building) {
 
 static PyObject* 
 py_an_get_nns_by_item(py_annoy *self, PyObject *args, PyObject *kwargs) {
-  int32_t item, n, search_k=-1, include_distances=0;
+  int64_t item, n, search_k=-1, include_distances=0;
   if (!self->ptr) 
     return NULL;
 
   static char const * kwlist[] = {"i", "n", "search_k", "include_distances", NULL};
-  if (!PyArg_ParseTupleAndKeywords(args, kwargs, "ii|ii", (char**)kwlist, &item, &n, &search_k, &include_distances))
+  if (!PyArg_ParseTupleAndKeywords(args, kwargs, "Li|ii", (char**)kwlist, &item, &n, &search_k, &include_distances))
     return NULL;
 
   if (!check_constraints(self, item, false)) {
     return NULL;
   }
 
-  vector<int32_t> result;
+  vector<int64_t> result;
   vector<float> distances;
 
   Py_BEGIN_ALLOW_THREADS;
@@ -331,7 +331,7 @@ py_an_get_nns_by_vector(py_annoy *self, PyObject *args, PyObject *kwargs) {
     return NULL;
   }
 
-  vector<int32_t> result;
+  vector<int64_t> result;
   vector<float> distances;
 
   Py_BEGIN_ALLOW_THREADS;
@@ -344,7 +344,7 @@ py_an_get_nns_by_vector(py_annoy *self, PyObject *args, PyObject *kwargs) {
 
 static PyObject* 
 py_an_get_item_vector(py_annoy *self, PyObject *args) {
-  int32_t item;
+  int64_t item;
   if (!self->ptr) 
     return NULL;
   if (!PyArg_ParseTuple(args, "i", &item))
@@ -368,11 +368,11 @@ py_an_get_item_vector(py_annoy *self, PyObject *args) {
 static PyObject* 
 py_an_add_item(py_annoy *self, PyObject *args, PyObject* kwargs) {
   PyObject* v;
-  int32_t item;
+  int64_t item;
   if (!self->ptr) 
     return NULL;
   static char const * kwlist[] = {"i", "vector", NULL};
-  if (!PyArg_ParseTupleAndKeywords(args, kwargs, "iO", (char**)kwlist, &item, &v))
+  if (!PyArg_ParseTupleAndKeywords(args, kwargs, "LO", (char**)kwlist, &item, &v))
     return NULL;
 
   if (!check_constraints(self, item, true)) {
@@ -464,7 +464,7 @@ py_an_unload(py_annoy *self) {
 
 static PyObject *
 py_an_get_distance(py_annoy *self, PyObject *args) {
-  int32_t i, j;
+  int64_t i, j;
   if (!self->ptr) 
     return NULL;
   if (!PyArg_ParseTuple(args, "ii", &i, &j))
@@ -484,7 +484,7 @@ py_an_get_n_items(py_annoy *self) {
   if (!self->ptr) 
     return NULL;
 
-  int32_t n = self->ptr->get_n_items();
+  int64_t n = self->ptr->get_n_items();
   return PyInt_FromLong(n);
 }
 
@@ -493,7 +493,7 @@ py_an_get_n_trees(py_annoy *self) {
   if (!self->ptr) 
     return NULL;
 
-  int32_t n = self->ptr->get_n_trees();
+  int64_t n = self->ptr->get_n_trees();
   return PyInt_FromLong(n);
 }
 
